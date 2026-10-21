@@ -401,6 +401,7 @@ html.calm *{animation:none!important;transition:none!important}
 .authc{width:100%;max-width:420px}
 .authLogo{display:flex;justify-content:center;margin-bottom:8px}
 .authLogo img{border-radius:16px}
+.cfl{margin:8px 0}.cst{padding:7px 10px;margin-left:8px;border-left:2px solid rgba(128,128,128,.5);font-size:.92em}.cfin{border-left-color:#e5483b;font-weight:700;color:#e5483b}.cno{opacity:.6;font-style:italic}
 </style>
 </head>
 <body>
@@ -516,7 +517,7 @@ html.calm *{animation:none!important;transition:none!important}
 </div>
 <div class="card" id="dxCard"><button class="ghost" id="dxBack" style="margin-bottom:12px">Back to dashboard</button>
   <div class="lab">Skilldex <small id="dxCount"></small></div>
-  <div class="tabs" id="dxTabs"><button type="button" data-t="lib" aria-pressed="true">Library</button><button type="button" data-t="col" aria-pressed="false">Collection</button><button type="button" data-t="tree" aria-pressed="false">Trees</button></div>
+  <div class="tabs" id="dxTabs"><button type="button" data-t="lib" aria-pressed="true">Library</button><button type="button" data-t="col" aria-pressed="false">Collection</button><button type="button" data-t="tree" aria-pressed="false">Trees</button><button type="button" data-t="chains" aria-pressed="false">Chains</button></div>
   <div id="lbView">
     <input id="lbQ" type="search" placeholder="Search techniques, positions or notes" aria-label="Search techniques">
     <div class="two"><select id="lbPos" aria-label="Position"></select><select id="lbSort" aria-label="Sort"><option value="az">A to Z</option><option value="low">Needs work first</option><option value="high">Most confident</option><option value="new">Undiscovered first</option></select></div>
@@ -528,6 +529,7 @@ html.calm *{animation:none!important;transition:none!important}
     <p class="note">Branches follow the links you set on each technique. Solid branches work for you, dashed ones are untested. Tap a technique to open it.</p>
     <div id="trOut"></div>
   </div>
+  <div id="chView" class="stepHide"><p class="note">A chain is a run of moves that ends in a finish. Build your game plans here and track how often they work live.</p><div id="chOut"></div></div>
   <select id="dxCat" aria-label="Skill category"><option value="">All skills</option><option value="S">Submissions</option><option value="T">Takedowns</option><option value="W">Sweeps</option><option value="E">Escapes</option><option value="P">Passes</option></select>
   <div class="dxd hide" id="dxDetail" aria-live="polite"></div>
   <div class="dex" id="dxGrid"></div>
@@ -934,8 +936,8 @@ function stats(){
     rounds:(S.rounds||[]).reduce((a,r)=>a+r.n,0)+(B.rounds||0),bigRound:(S.rounds||[]).some(r=>r.n>=10),...more(L,got,B,days)};
 }
 function renderAch(){
-  const s=stats(),got=S.dex||{},unl=S.unl||[];
-  const A=[...ACH,...ACH2,...ACH3].map(a=>({g:a[0],n:a[1],i:a[2],d:a[3],u:S.ach.includes(a[1])||unl.includes(a[1])||(typeof a[4]==='function'&&a[4](s))}));
+  const s=stats(),sf=floored(s),got=S.dex||{},unl=S.unl||[];
+  const A=[...ACH,...ACH2,...ACH3].map(a=>{const f=typeof a[4]==='function'?a[4]:null,real=!!(f&&f(s)),imp=!real&&!!((f&&f(sf))||IMPL(a[1]));return{g:a[0],n:a[1],i:a[2],d:a[3]+(imp?' Counted from your starting background.':''),bg:imp,u:S.ach.includes(a[1])||unl.includes(a[1])||real||imp}});
   const nu=A.filter(a=>a.u).length;
   $('acCount').textContent=nu+' of '+A.length+' unlocked';
   $('acAll').textContent=S.showAllAch?'Show fewer achievements':'Show all '+A.length+' achievements';
@@ -950,10 +952,10 @@ function renderAch(){
   return A;
 }
 function checkAch(){
-  const now=renderAch().filter(a=>a.u).map(a=>a.n);
+  const A0=renderAch(),now=A0.filter(a=>a.u).map(a=>a.n);
   if(!S.unl){S.unl=now;save();return}
   const nw=now.filter(n=>!S.unl.includes(n));
-  if(nw.length){S.unl=now;save();$('dMsg').textContent+=' Achievement unlocked: '+nw.join(', ')+'.'}
+  if(nw.length){S.unl=now;save();const ld=nw.filter(n=>!(A0.find(a=>a.n===n)||{}).bg);if(ld.length)$('dMsg').textContent+=' Achievement unlocked: '+ld.join(', ')+'.'}
 }
 function render(){
   const c=cur(),need=200+8*c.L,inX=c.capped?need:Math.max(0,S.xp-cum(c.L));
@@ -1297,6 +1299,48 @@ const TS=n=>{S.tech=S.tech||{};return S.tech[n]=S.tech[n]||{conf:0,notes:'',str:
 const LKS=n=>(S.lk||{})[n]||[];
 const stars=n=>'★'.repeat(n)+'☆'.repeat(5-n);
 function chain(n){const out=[n],seen=new Set([n]);let c=n;for(let i=0;i<4;i++){const nx=LKS(c).find(l=>l.w&&!seen.has(l.t));if(!nx)break;out.push(nx.t);seen.add(nx.t);c=nx.t}return out}
+
+const FINP={'Closed guard':['Triangle choke','Armbar','Omoplata','Kimura','Cross collar choke'],'Open guard':['Triangle choke','Armbar','Kimura'],'Half guard':['Kimura','Americana'],'Side control':['Americana','Kimura','Arm triangle','North-south choke','Paper cutter choke'],'Mount':['Armbar','Americana','Ezekiel choke','Arm triangle'],'Back':['Rear naked choke','Bow and arrow choke','Loop choke'],'Turtle':['Guillotine',"D'Arce choke",'Anaconda choke'],'Leg locks':['Heel hook','Straight ankle lock','Kneebar'],'Standing':['Guillotine'],'Passing':['Americana','Arm triangle','North-south choke']};
+const SUBS=()=>ALLT().filter(x=>x.c==='S').map(x=>x.n).sort();
+let chEd=null;
+function finPath(n){const t=TI(n);if(t&&t.c==='S')return '<p class="note" style="margin:0 0 6px">🏁 This is a finish.</p>';
+  for(const wo of [1,0]){const q=[[n]],seen=new Set([n]);while(q.length){const p=q.shift();if(p.length>6)continue;for(const l of LKS(p[p.length-1])){if((wo&&!l.w)||seen.has(l.t))continue;seen.add(l.t);const np=[...p,l.t],ti=TI(l.t);if(ti&&ti.c==='S')return '<p class="note" style="margin:0 0 6px">🏁 '+(wo?'Your path':'Possible path')+': '+np.map(esc).join(' > ')+'</p>';q.push(np)}}}
+  return '<p class="note" style="margin:0 0 6px">No finish linked yet. Add a submission below.</p>'}
+const flow=c=>'<div class="cfl">'+[c.start,...c.steps].map(n=>'<div class="cst">'+(POSL.includes(n)?'📍 ':'')+esc(n)+'</div>').join('')+(c.finish?'<div class="cst cfin">🏁 '+esc(c.finish)+'</div>':'<div class="cst cno">No finish yet</div>')+'</div>';
+const syncEd=()=>{if(!chEd||!$('chName'))return;chEd.name=$('chName').value.trim().slice(0,50);chEd.start=$('chStart').value;chEd.finish=$('chFin').value||null};
+function renderChains(){
+  const o=$('chOut');if(!o)return;S.chains=S.chains||[];
+  if(chEd){const c=chEd,opts='<optgroup label="Positions">'+POSL.map(p=>'<option>'+p+'</option>').join('')+'</optgroup><optgroup label="Techniques">'+ALLT().sort((a,b)=>a.n.localeCompare(b.n)).map(x=>'<option>'+esc(x.n)+'</option>').join('')+'</optgroup>';
+    const last=c.steps.length?c.steps[c.steps.length-1]:c.start,nx=LKS(last).filter(l=>l.w).map(l=>l.t).filter(t=>!c.steps.includes(t)&&t!==c.start).slice(0,4);
+    const lp=POSL.includes(last)?last:((TI(last)||{}).c!=='S'?(TI(last)||{}).p:null),fs=(FINP[lp]||[]).filter(n=>TI(n)&&n!==c.finish);
+    o.innerHTML='<input id="chName" placeholder="Chain name, e.g. Knee cut to back" maxlength="50" value="'+esc(c.name)+'"><label for="chStart">Starts from</label><select id="chStart">'+opts+'</select>'+
+    c.steps.map((s,i)=>'<div class="lk"><span class="nm">'+(i+1)+'. '+esc(s)+'</span>'+(i?'<button type="button" class="ghost" data-up="'+i+'" aria-label="Move up">↑</button>':'')+'<button type="button" class="ghost" data-sd="'+i+'" aria-label="Remove step">×</button></div>').join('')+
+    '<div class="two"><select id="chAdd">'+opts+'</select><button type="button" class="ghost" id="chAddB" style="margin:0">Add step</button></div>'+(nx.length?'<small>Your working links</small><div class="chips">'+nx.map(s=>'<button type="button" data-ns="'+esc(s)+'">+ '+esc(s)+'</button>').join('')+'</div>':'')+
+    '<div class="lab" style="margin-top:14px">🏁 Finish</div><select id="chFin"><option value="">No finish yet</option>'+SUBS().map(s=>'<option'+(c.finish===s?' selected':'')+'>'+esc(s)+'</option>').join('')+'</select>'+(fs.length?'<small>Suggested finishes from here</small><div class="chips">'+fs.map(s=>'<button type="button" data-sf="'+esc(s)+'">🏁 '+esc(s)+'</button>').join('')+'</div>':'')+flow(c)+
+    '<button type="button" class="go" id="chSave">Save chain</button><button type="button" class="ghost" id="chCancel">Cancel</button>'+(c.id?'<button type="button" class="ghost" id="chDel">Delete chain</button>':'');
+    $('chStart').value=c.start;return}
+  o.innerHTML='<button type="button" class="go" id="chNew">+ New chain</button>'+(S.chains.map(c=>'<div class="card" style="margin:10px 0;padding:12px"><b>'+esc(c.name)+'</b> <small>'+(c.finish?'Complete':'Needs a finish')+'</small>'+flow(c)+'<small>Tried '+(c.tried||0)+', finished '+(c.done||0)+(c.tried?' ('+Math.round((c.done||0)/c.tried*100)+'%)':'')+'</small><div class="two"><button type="button" class="ghost" data-ct="'+c.id+'">Tried it</button><button type="button" class="ghost" data-cd="'+c.id+'"'+(c.finish?'':' disabled')+'>🏁 Finished it</button></div><button type="button" class="ghost" data-ce="'+c.id+'">Edit</button></div>').join('')||'<p class="note">No chains yet. A chain is a run of moves that ends in a finish. Build one, then tap Tried it or Finished it as you train it live.</p>');
+}
+if($('chOut')){
+$('chOut').onclick=ev=>{const b=ev.target.closest('button');if(!b)return;const D=b.dataset;
+  if(b.id==='chNew'){chEd={id:0,name:'',start:POSL[0],steps:[],finish:null};renderChains();return}
+  if(D.ce){chEd=JSON.parse(JSON.stringify(S.chains.find(x=>String(x.id)===D.ce)));renderChains();return}
+  if(D.ct||D.cd){const c=S.chains.find(x=>String(x.id)===(D.ct||D.cd));c.tried=(c.tried||0)+1;if(D.cd){if(!c.done)S.xp+=10;c.done=(c.done||0)+1}save();$('dMsg').textContent='';render();return}
+  if(!chEd)return;syncEd();
+  if(b.id==='chCancel')chEd=null;
+  else if(b.id==='chAddB'){const v=$('chAdd').value;if(v!==chEd.start&&!chEd.steps.includes(v)&&chEd.steps.length<8)chEd.steps.push(v)}
+  else if(D.ns)chEd.steps.push(D.ns);
+  else if(D.sf)chEd.finish=D.sf;
+  else if(D.sd!==undefined)chEd.steps.splice(+D.sd,1);
+  else if(D.up!==undefined){const i=+D.up;[chEd.steps[i-1],chEd.steps[i]]=[chEd.steps[i],chEd.steps[i-1]]}
+  else if(b.id==='chSave'){if(!chEd.name)chEd.name=chEd.start+(chEd.finish?' to '+chEd.finish:' chain');const i=S.chains.findIndex(x=>x.id===chEd.id);if(chEd.id&&i>=0)S.chains[i]={...S.chains[i],...chEd};else{chEd.id=Date.now();chEd.tried=0;chEd.done=0;S.chains.push(chEd)}chEd=null;save();$('dMsg').textContent='';render();return}
+  else if(b.id==='chDel'){if(b.dataset.arm){S.chains=S.chains.filter(x=>x.id!==chEd.id);chEd=null;save();render();return}b.dataset.arm=1;b.textContent='Tap again to delete';return}
+  renderChains()};
+$('chOut').onchange=ev=>{if(ev.target.id==='chFin'&&chEd){syncEd();renderChains()}};
+}
+const FL=[[0,0,0,0],[100,100,1,50],[300,300,3,200],[600,600,6,500],[1000,1000,10,1000]];
+const floored=s=>{const f=FL[S.belt]||FL[0];return{...s,n:Math.max(s.n,f[0]),hrs:Math.max(s.hrs,f[1]),years:Math.max(s.years,f[2]),rounds:Math.max(s.rounds,f[3])}};
+const IMPL=n=>{const B=S.base||{};return(S.belt>=1&&(n==='First stripe'||n==='Four stripes'))||(B.comps>=3&&n==='First blood')||(B.teach>=1&&n==='Coach mode')};
 function markStage(n,k){
   S.dex=S.dex||{};let e=S.dex[n];
   if(!e){e=S.dex[n]={t:Date.now(),n:1,st:{}};S.xp+=7}
@@ -1307,7 +1351,7 @@ function addLink(n,t){if(!t||t===n)return;S.lk=S.lk||{};const L=S.lk[n]=S.lk[n]|
 function renderMove(){
   const t=TI(mvN);if(!t)return;
   const n=t.n,d=TD(n),e=(S.dex||{})[n],st=(e&&e.st)||{},L=LKS(n),ch=chain(n);
-  const back=Object.keys(S.lk||{}).filter(k=>(S.lk[k]||[]).some(l=>l.t===n)),sug=(SUGG[t.c]||[]).filter(s=>!L.some(l=>l.t===s));
+  const back=Object.keys(S.lk||{}).filter(k=>(S.lk[k]||[]).some(l=>l.t===n)),sug=(SUGG[t.c]||[]).filter(s=>!L.some(l=>l.t===s)),fin=(FINP[t.p]||[]).filter(s=>s!==n&&TI(s)&&!L.some(l=>l.t===s));
   const opts='<optgroup label="Positions">'+POSL.map(p=>'<option>'+p+'</option>').join('')+'</optgroup><optgroup label="Techniques">'+ALLT().filter(x=>x.n!==n).sort((a,b)=>a.n.localeCompare(b.n)).map(x=>'<option>'+esc(x.n)+'</option>').join('')+'</optgroup>';
   $('mvC').innerHTML='<div class="mvh"><span class="popI">'+CATS[t.c]+'</span><div><b>'+esc(n)+'</b><span class="d">'+t.p+', '+CATN[t.c].toLowerCase()+(e?'':', not discovered yet')+'</span></div></div>'+
    (DESC[n]?'<p>'+DESC[n]+'</p>':'')+
@@ -1319,12 +1363,12 @@ function renderMove(){
    '<div class="lab" style="margin-top:14px">Reference videos</div>'+
    (d.vids.map((v,i)=>'<div class="lk"><span class="nm"><a href="'+esc(v.u)+'" target="_blank" rel="noopener noreferrer">'+esc(v.t)+'</a></span><button type="button" class="ghost" data-vdel="'+i+'" aria-label="Remove video">×</button></div>').join('')||'<p class="note" style="margin:0">No videos saved yet.</p>')+
    '<input id="mvVidT" placeholder="Title, e.g. Coach demo" maxlength="40" style="margin-top:8px"><input id="mvVidU" placeholder="Paste a link" inputmode="url"><button type="button" class="ghost" id="mvVidAdd">Save video link</button>'+
-   '<div class="lab" style="margin-top:14px">Leads to</div>'+(ch.length>1?'<p class="note" style="margin:0 0 6px">Your chain: '+ch.map(esc).join(' > ')+'</p>':'')+
-   (L.map((l,i)=>'<div class="lk"><span class="nm">'+(POSL.includes(l.t)?'📍 ':'')+esc(l.t)+'</span>'+(TI(l.t)?'<button type="button" class="ghost" data-open="'+esc(l.t)+'">Open</button>':'')+'<button type="button" class="ghost" data-lw="'+i+'">'+(l.w?'★ Works':'☆ Mark works')+'</button><button type="button" class="ghost" data-ldel="'+i+'" aria-label="Remove link">×</button></div>').join('')||'<p class="note" style="margin:0">No links yet. Build the chain below.</p>')+
+   '<div class="lab" style="margin-top:14px">Leads to</div>'+finPath(n)+
+   (L.map((l,i)=>'<div class="lk"><span class="nm">'+(POSL.includes(l.t)?'📍 ':'')+((TI(l.t)||{}).c==='S'?'🏁 ':'')+esc(l.t)+'</span>'+(TI(l.t)?'<button type="button" class="ghost" data-open="'+esc(l.t)+'">Open</button>':'')+'<button type="button" class="ghost" data-lw="'+i+'">'+(l.w?'★ Works':'☆ Mark works')+'</button><button type="button" class="ghost" data-ldel="'+i+'" aria-label="Remove link">×</button></div>').join('')||'<p class="note" style="margin:0">No links yet. Build the chain below.</p>')+
    (sug.length?'<small style="margin-top:8px">Suggested next steps</small><div class="chips">'+sug.map(s=>'<button type="button" data-sug="'+esc(s)+'">+ '+esc(s)+'</button>').join('')+'</div>':'')+
-   '<div class="two" style="margin-top:8px"><select id="mvLkSel" aria-label="Link to">'+opts+'</select><button type="button" class="ghost" id="mvLkAdd" style="margin:0">Add link</button></div>'+
+   (fin.length&&t.c!=='S'?'<small style="margin-top:8px">Add a finish</small><div class="chips">'+fin.map(s=>'<button type="button" data-sug="'+esc(s)+'">🏁 '+esc(s)+'</button>').join('')+'</div>':'')+'<div class="two" style="margin-top:8px"><select id="mvLkSel" aria-label="Link to">'+opts+'</select><button type="button" class="ghost" id="mvLkAdd" style="margin:0">Add link</button></div>'+
    (back.length?'<div class="lab" style="margin-top:14px">Leads here from</div><div class="chips">'+back.map(k=>'<button type="button" data-open="'+esc(k)+'">'+esc(k)+'</button>').join('')+'</div>':'')+
-   '<button type="button" class="go" id="mvClose" style="margin-top:14px">Done</button>';
+   '<button type="button" class="ghost" id="mvChain" style="margin-top:14px">⛓️ Build a chain with this</button><button type="button" class="go" id="mvClose" style="margin-top:10px">Done</button>';
 }
 function openMove(n){mvN=n;renderMove();$('mvPop').classList.remove('hide');$('mvC').scrollTop=0}
 $('mvC').onclick=ev=>{
@@ -1339,6 +1383,7 @@ $('mvC').onclick=ev=>{
   if(D.open){mvN=D.open;renderMove();$('mvC').scrollTop=0;return}
   if(D.sug){addLink(n,D.sug);return}
   if(b.id==='mvLkAdd'){addLink(n,$('mvLkSel').value);return}
+  if(b.id==='mvChain'){const t=TI(n),sb=t.c==='S';chEd={id:0,name:'',start:sb?(POSL.includes(t.p)?t.p:POSL[0]):n,steps:[],finish:sb?n:null};$('mvPop').classList.add('hide');$('dxOpen').click();dxVis('chains');renderChains();return}
   if(b.id==='mvClose')$('mvPop').classList.add('hide');
 };
 $('mvC').onchange=ev=>{const id=ev.target.id,v=ev.target.value;if(!mvN||!['mvNotes','mvStr','mvWeak'].includes(id))return;const T=TS(mvN);if(id==='mvNotes')T.notes=v.slice(0,2000);if(id==='mvStr')T.str=v.slice(0,1000);if(id==='mvWeak')T.weak=v.slice(0,1000);save()};
@@ -1357,12 +1402,12 @@ function renderTree(){
   const kids=(n,path)=>POSL.includes(n)?ALLT().filter(t=>t.p===n&&!path.has(t.n)&&(TD(t.n).conf>0||(S.dex||{})[t.n])).sort((a,b)=>TD(b.n).conf-TD(a.n).conf).slice(0,6).map(t=>({n:t.n,w:1})):LKS(n).filter(l=>!path.has(l.t)).map(l=>({n:l.t,w:l.w}));
   const rec=(n,path,depth,w)=>{
     const p2=new Set(path).add(n),isP=POSL.includes(n),ti=TI(n),ks=depth<4?kids(n,p2):[];
-    const lab=isP?'<span class="nd pos">📍 '+esc(n)+'</span>':'<button type="button" class="nd'+(w?'':' faint')+'" data-n="'+esc(n)+'">'+(ti?CATS[ti.c]+' ':'')+esc(n)+' <span class="stars">'+stars(TD(n).conf)+'</span></button>';
+    const lab=isP?'<span class="nd pos">📍 '+esc(n)+'</span>':'<button type="button" class="nd'+(w?'':' faint')+'" data-n="'+esc(n)+'">'+(ti?(ti.c==='S'?'🏁 ':CATS[ti.c]+' '):'')+esc(n)+' <span class="stars">'+stars(TD(n).conf)+'</span></button>';
     return '<li>'+lab+(ks.length?'<ul class="tr">'+ks.map(k=>rec(k.n,p2,depth+1,k.w)).join('')+'</ul>':'')+'</li>'};
   $('trOut').innerHTML='<ul class="tr" style="border-left:0;padding-left:0">'+rec(s,new Set(),0,1)+'</ul>'+(kids(s,new Set([s])).length?'':'<p class="note">Nothing branches from here yet. Open a technique and add links, or rate and practise moves so they appear under their position.</p>');
 }
-function renderSkilldex2(){fillTr();renderLib();renderTree();if(!$('mvPop').classList.contains('hide'))renderMove()}
-function dxVis(t){[...$('dxTabs').children].forEach(b=>b.setAttribute('aria-pressed',b.dataset.t===t));$('lbView').classList.toggle('stepHide',t!=='lib');$('trView').classList.toggle('stepHide',t!=='tree');[$('dxCat'),$('dxDetail'),$('dxGrid')].forEach(e=>e.classList.toggle('stepHide',t!=='col'))}
+function renderSkilldex2(){fillTr();renderLib();renderTree();renderChains();if(!$('mvPop').classList.contains('hide'))renderMove()}
+function dxVis(t){[...$('dxTabs').children].forEach(b=>b.setAttribute('aria-pressed',b.dataset.t===t));$('lbView').classList.toggle('stepHide',t!=='lib');$('trView').classList.toggle('stepHide',t!=='tree');$('chView').classList.toggle('stepHide',t!=='chains');[$('dxCat'),$('dxDetail'),$('dxGrid')].forEach(e=>e.classList.toggle('stepHide',t!=='col'))}
 $('dxTabs').onclick=ev=>{const b=ev.target.closest('button');if(b)dxVis(b.dataset.t)};
 $('lbPos').innerHTML='<option value="">All positions</option>'+POSL.map(p=>'<option>'+p+'</option>').join('');
 $('ctP').innerHTML=POSL.map(p=>'<option>'+p+'</option>').join('');
@@ -1479,7 +1524,7 @@ function renderSettings(){
   d.insertAdjacentHTML('beforeend','<button type="button" class="ghost" id="seDel" style="margin-top:14px">Delete data on this device</button>');
   if(bkLab)bkLab.remove();if(bkNote)bkNote.remove();
   const v=mk('✨','About and updates');
-  v.insertAdjacentHTML('beforeend','<div class="setrow"><span>Version</span><b>0.10.0 beta</b></div><div class="setrow"><span>Last updated</span><b>19 Oct 2026</b></div><div class="setrow"><span>Storage</span><b>This device</b></div><button type="button" class="ghost" id="seReload" style="margin-top:12px">Reload for the latest version</button><div class="lab" style="margin-top:14px">What is new</div><p class="note" style="margin:6px 0">Home hero with a weekly ring and new bottom navigation.</p><p class="note" style="margin:6px 0">Skilldex 2.0 with a library, technique trees, notes and videos.</p><p class="note" style="margin:6px 0">Athlete profile with banner, bio and academy.</p><p class="note" style="margin:6px 0">Light and dark appearance, goals, focus and journal.</p>');
+  v.insertAdjacentHTML('beforeend','<div class="setrow"><span>Version</span><b>0.11.0 beta</b></div><div class="setrow"><span>Last updated</span><b>19 Oct 2026</b></div><div class="setrow"><span>Storage</span><b>This device</b></div><button type="button" class="ghost" id="seReload" style="margin-top:12px">Reload for the latest version</button><div class="lab" style="margin-top:14px">What is new</div><p class="note" style="margin:6px 0">Home hero with a weekly ring and new bottom navigation.</p><p class="note" style="margin:6px 0">Skilldex 2.0 with a library, technique trees, notes and videos.</p><p class="note" style="margin:6px 0">Athlete profile with banner, bio and academy.</p><p class="note" style="margin:6px 0">Light and dark appearance, goals, focus and journal.</p>');
   const h=mk('🤝','Help and community');
   h.insertAdjacentHTML('beforeend','<p class="note" style="margin-top:0">Community guidelines: be respectful on and off the mats, never share someone else video or details without their consent, and keep your belt rank and results honest.</p><p class="note">Report and block tools will arrive with social features. Estimated history is always kept separate from sessions you logged.</p>');
   $('seCard').addEventListener('change',ev=>{const e=ev.target;if(!e.dataset||!e.dataset.s)return;let v=e.type==='checkbox'?(e.checked?1:0):e.value;if(e.dataset.s==='week')v=+v;ss(e.dataset.s,v);save();render()});
@@ -1801,7 +1846,13 @@ const ACH3=[
 ['Skilldex','Camera roll','🎞️','Save reference video links on 5 techniques.',()=>Object.values(S.tech||{}).filter(t=>(t.vids||[]).length).length>=5],
 ['Skilldex','Sure thing','💯','Rate a technique 5 out of 5 for confidence.',()=>Object.values(S.tech||{}).some(t=>t.conf>=5)],
 ['Skilldex','Chain builder','⛓️','Mark ten links as working for you.',()=>Object.values(S.lk||{}).reduce((a,l)=>a+l.filter(x=>x.w).length,0)>=10],
-['Skilldex','Own technique','✏️','Add your own technique to the library.',()=>(S.custom||[]).length>0]
+['Skilldex','Own technique','✏️','Add your own technique to the library.',()=>(S.custom||[]).length>0],
+['Chains','First chain','⛓️','Build a chain that ends in a finish.',()=>(S.chains||[]).some(c=>c.finish)],
+['Chains','Game plan','🗺️','Build three chains that each end in a finish.',()=>(S.chains||[]).filter(c=>c.finish).length>=3],
+['Chains','Long combo','🔗','Build a finishing chain with five or more steps.',()=>(S.chains||[]).some(c=>c.finish&&c.steps.length>=5)],
+['Chains','Every route','🧭','Build finishing chains that end in three different submissions.',()=>new Set((S.chains||[]).filter(c=>c.finish).map(c=>c.finish)).size>=3],
+['Chains','Hit the plan','🎯','Finish one of your chains live for the first time.',()=>(S.chains||[]).some(c=>c.done>0)],
+['Chains','Closer','🏁','Finish your chains live ten times.',()=>(S.chains||[]).reduce((a,c)=>a+(c.done||0),0)>=10]
 ];
 $('jrBody').onclick=ev=>{
   const t=ev.target,nb=t.closest('.nb');
