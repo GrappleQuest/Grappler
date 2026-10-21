@@ -1,2 +1,2 @@
 # Grappler
-Bjj and grappling tracker and stat sheet 
+Bjj, grappling tracker with rpg style stat sheet 
